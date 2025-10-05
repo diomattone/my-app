@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Vespa Racing Tracker 🛵</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background-color: #000;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 1em;
+    }
+    h1 {
+      font-size: 2em;
+      color: #f5f5dc;
+      margin-bottom: 0.5em;
+    }
+    .speed {
+      font-size: 4em;
+      color: #ff3c3c;
+      margin: 0.2em 0;
+    }
+    .label {
+      font-size: 1.2em;
+      color: #f5f5dc;
+    }
+    .max {
+      font-size: 2.5em;
+      color: #ffcc00;
+      text-shadow: 0 0 10px #ffcc00;
+    }
+    .avg {
+      font-size: 1.8em;
+      color: #f5f5dc;
+    }
+    .timer {
+      font-size: 2em;
+      color: #ff3c3c;
+      margin: 0.5em 0;
+    }
+    button {
+      margin-top: 1em;
+      padding: 0.7em 1.5em;
+      font-size: 1em;
+      background-color: #ffcc00;
+      border: none;
+      border-radius: 5px;
+      color: #000;
+      font-weight: bold;
+    }
+    .session {
+      margin-top: 2em;
+      text-align: left;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .session-entry {
+      background: #111;
+      padding: 1em;
+      margin-bottom: 1em;
+      border-left: 4px solid #ffcc00;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vespa Racing Tracker 🛵</h1>
+  <div class="speed" id="currentSpeed">--</div>
+  <div class="label">KM/H</div>
+
+  <div class="label">TOP SPEED</div>
+  <div class="max" id="maxSpeed">--</div>
+
+  <div class="label">AVERAGE</div>
+  <div class="avg" id="avgSpeed">--</div>
+
+  <div class="label">TIMER</div>
+  <div class="timer" id="duration">00:00</div>
+
+  <button onclick="saveSession()">💾 Salva sessione</button>
+
+  <div class="session" id="sessionHistory">
+    <h2 style="color:#f5f5dc;">📂 Storico Sessioni</h2>
+  </div>
+
+  <script>
+    let maxSpeed = 0;
+    let totalDistance = 0;
+    let startTime = Date.now();
+    let lastPosition = null;
+
+    let timerInterval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = Math.floor(elapsed % 60);
+      document.getElementById("duration").textContent =
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }, 1000);
+
+    function updateSpeed(position) {
+      const speedMps = position.coords.speed || 0;
+      const speedKmh = (speedMps * 3.6).toFixed(1);
+      document.getElementById("currentSpeed").textContent = speedKmh;
+
+      if (speedKmh > maxSpeed) {
+        maxSpeed = speedKmh;
+        document.getElementById("maxSpeed").textContent = maxSpeed;
+      }
+
+      if (lastPosition) {
+        const d = getDistanceFromLatLonInKm(
+          lastPosition.coords.latitude,
+          lastPosition.coords.longitude,
+          position.coords.latitude,
+          position.coords.longitude
+        );
+        totalDistance += d;
+      }
+      lastPosition = position;
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      const avgSpeed = totalDistance > 0 ? ((totalDistance / (elapsed / 3600)).toFixed(1)) : 0;
+      document.getElementById("avgSpeed").textContent = avgSpeed;
+    }
+
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function saveSession() {
+      const now = new Date();
+      const session = {
+        date: now.toLocaleString(),
+        max: maxSpeed,
+        avg: document.getElementById("avgSpeed").textContent,
+        time: document.getElementById("duration").textContent
+      };
+      const sessions = JSON.parse(localStorage.getItem("vespaSessions") || "[]");
+      sessions.unshift(session);
+      localStorage.setItem("vespaSessions", JSON.stringify(sessions));
+      renderSessions();
+    }
+
+    function renderSessions() {
+      const container = document.getElementById("sessionHistory");
+      container.innerHTML = "<h2 style='color:#f5f5dc;'>📂 Storico Sessioni</h2>";
+      const sessions = JSON.parse(localStorage.getItem("vespaSessions") || "[]");
+      sessions.forEach(s => {
+        const div = document.createElement("div");
+        div.className = "session-entry";
+        div.innerHTML = `<strong>${s.date}</strong><br>
+          🏁 Max: ${s.max} km/h<br>
+          📊 Media: ${s.avg} km/h<br>
+          ⏱️ Tempo: ${s.time}`;
+        container.appendChild(div);
+      });
+    }
+
+    renderSessions();
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(updateSpeed, err => {
+        alert("Errore GPS: " + err.message);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+      });
+    } else {
+      alert("GPS non disponibile.");
+    }
+  </script>
+</body>
+</html>
